@@ -84,5 +84,9 @@ def alexnet(pretrained=False, **kwargs):
         pretrained (bool): If True, returns a model pre-trained on ImageNet
     """
     model = AlexNet(**kwargs)
+    if pretrained:
+        model.features = torch.nn.DataParallel(model.features)
+        model.cuda()
+        model.load_state_dict(torch.load('alexnet.pth'))
     
     return model
