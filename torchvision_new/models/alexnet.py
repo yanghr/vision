@@ -1,38 +1,13 @@
-import torch
 import torch.nn as nn
-import torch.utils.model_zoo as model_zoo
+from .utils import load_state_dict_from_url
 
 
 __all__ = ['AlexNet', 'alexnet']
 
 
-class LRN(nn.Module):
-    def __init__(self, local_size=1, alpha=1.0, beta=0.75, ACROSS_CHANNELS=True):
-        super(LRN, self).__init__()
-        self.ACROSS_CHANNELS = ACROSS_CHANNELS
-        if ACROSS_CHANNELS:
-            self.average=nn.AvgPool3d(kernel_size=(local_size, 1, 1),
-                    stride=1,
-                    padding=(int((local_size-1.0)/2), 0, 0))
-        else:
-            self.average=nn.AvgPool2d(kernel_size=local_size,
-                    stride=1,
-                    padding=int((local_size-1.0)/2))
-        self.alpha = alpha
-        self.beta = beta
-
-
-    def forward(self, x):
-        if self.ACROSS_CHANNELS:
-            div = x.pow(2).unsqueeze(1)
-            div = self.average(div).squeeze(1)
-            div = div.mul(self.alpha).add(1.0).pow(self.beta)
-        else:
-            div = x.pow(2)
-            div = self.average(div)
-            div = div.mul(self.alpha).add(1.0).pow(self.beta)
-        x = x.div(div)
-        return x
+model_urls = {
+    'alexnet': 'https://download.pytorch.org/models/alexnet-owt-4df8aa71.pth',
+}
 
 
 class AlexNet(nn.Module):
@@ -40,31 +15,28 @@ class AlexNet(nn.Module):
     def __init__(self, num_classes=1000):
         super(AlexNet, self).__init__()
         self.features = nn.Sequential(
-            nn.Conv2d(3, 96, kernel_size=11, stride=4, padding=0),
+            nn.Conv2d(3, 64, kernel_size=11, stride=4, padding=2),
             nn.ReLU(inplace=True),
-            LRN(local_size=5, alpha=0.0001, beta=0.75),
             nn.MaxPool2d(kernel_size=3, stride=2),
-            nn.Conv2d(96, 256, kernel_size=5, padding=2, groups=2),
+            nn.Conv2d(64, 192, kernel_size=5, padding=2),
             nn.ReLU(inplace=True),
-            LRN(local_size=5, alpha=0.0001, beta=0.75),
             nn.MaxPool2d(kernel_size=3, stride=2),
-            nn.Conv2d(256, 384, kernel_size=3, padding=1),
+            nn.Conv2d(192, 384, kernel_size=3, padding=1),
             nn.ReLU(inplace=True),
-            nn.Conv2d(384, 384, kernel_size=3, padding=1, groups=2),
+            nn.Conv2d(384, 256, kernel_size=3, padding=1),
             nn.ReLU(inplace=True),
-            nn.Conv2d(384, 256, kernel_size=3, padding=1, groups=2),
+            nn.Conv2d(256, 256, kernel_size=3, padding=1),
             nn.ReLU(inplace=True),
             nn.MaxPool2d(kernel_size=3, stride=2),
         )
         self.avgpool = nn.AdaptiveAvgPool2d((6, 6))
         self.classifier = nn.Sequential(
-            #nn.Dropout(),
+            nn.Dropout(),
             nn.Linear(256 * 6 * 6, 4096),
             nn.ReLU(inplace=True),
             nn.Dropout(),
             nn.Linear(4096, 4096),
             nn.ReLU(inplace=True),
-            nn.Dropout(),
             nn.Linear(4096, num_classes),
         )
 
@@ -76,17 +48,16 @@ class AlexNet(nn.Module):
         return x
 
 
-def alexnet(pretrained=False, **kwargs):
+def alexnet(pretrained=False, progress=True, **kwargs):
     r"""AlexNet model architecture from the
     `"One weird trick..." <https://arxiv.org/abs/1404.5997>`_ paper.
-
     Args:
         pretrained (bool): If True, returns a model pre-trained on ImageNet
+        progress (bool): If True, displays a progress bar of the download to stderr
     """
     model = AlexNet(**kwargs)
     if pretrained:
-        model.features = torch.nn.DataParallel(model.features)
-        model.cuda()
-        model.load_state_dict(torch.load('alexnet.pth'))
-    
+        state_dict = load_state_dict_from_url(model_urls['alexnet'],
+                                              progress=progress)
+        model.load_state_dict(state_dict)
     return model
